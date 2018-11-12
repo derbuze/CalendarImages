@@ -4,7 +4,8 @@ php:
   - '7.2'
 
 before_install:
-  - composer self-update
+  #- composer self-update
+  - composer update
 
 install:
   - composer install
