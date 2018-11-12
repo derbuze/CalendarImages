@@ -1,0 +1,2 @@
+php bin/console server-run
+php bin/console app:sort-images 2016 public/source public/target
