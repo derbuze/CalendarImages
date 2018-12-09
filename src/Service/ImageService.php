@@ -12,6 +12,7 @@ namespace App\Service;
 use DateTime;
 use DirectoryIterator;
 use Exception;
+use Symfony\Component\Console\Helper\ProgressBar;
 
 class ImageService
 {
@@ -32,6 +33,12 @@ class ImageService
 
     /** @var string */
     private $year;
+
+    /** @var integer */
+    private $currentFileNumber;
+
+    /** @var ProgressBar */
+    private $progressBar;
 
     /**
      * @return int
@@ -98,7 +105,6 @@ class ImageService
         $this->year = $year;
     }
 
-
     /**
      * @return array
      */
@@ -132,37 +138,73 @@ class ImageService
     }
 
     /**
+     * @return int
+     */
+    public function getCurrentFileNumber(): int
+    {
+        return $this->currentFileNumber;
+    }
+
+    /**
+     * @param int $currentFileNumber
+     */
+    public function setCurrentFileNumber(int $currentFileNumber)
+    {
+        $this->currentFileNumber = $currentFileNumber;
+    }
+
+    /**
+     * @return ProgressBar
+     */
+    public function getProgressBar(): ProgressBar
+    {
+        return $this->progressBar;
+    }
+
+    /**
+     * @param ProgressBar $progressBar
+     */
+    public function setProgressBar(ProgressBar $progressBar)
+    {
+        $this->progressBar = $progressBar;
+    }
+
+    /**
      * Function scans folders and sorts images by original creation date
      */
     public function sortImages()
     {
         $this->resetTargetFolders();
-        $this->createTargetFolders($this->getTarget());
-        $this->createTargetFolders($this->getTarget());
+        $this->createTargetFolders();
         $directoryIterator = new DirectoryIterator($this->getSource());
 
         foreach ($directoryIterator as $fileInfo) {
             if (!$fileInfo->isDot()) {
 
-                $this->fileCount++;
+                $this->progressBar->advance();
 
                 $month = null;
-                $sourcePath = $this->getSource().'/'.$fileInfo->getFilename();
+                $sourcePath = $this->getSource() . '/' . $fileInfo->getFilename();
                 $exifData = @exif_read_data($sourcePath, 'FILE', true);
-                $creationDate = $this->getCreationDate($exifData);
-                if ($creationDate instanceof DateTime) {
-                    $year = $creationDate->format('Y');
-                    if ($year === $this->getYear()) {
-                        $month = $creationDate->format('m');
-                        $this->succeededFiles[] = array($fileInfo->getFilename(), $month);
-                        $this->copyFile($sourcePath, $year, $month, $fileInfo);
+                if (is_array($exifData)) {
+                    try {
+                        $creationDate = $this->getCreationDate($exifData);
+                        $year = $creationDate->format('Y');
+                        if ($year === $this->getYear()) {
+                            $month = $creationDate->format('m');
+                            $this->succeededFiles[] = array($fileInfo->getFilename(), $month);
+                            $this->copyFile($sourcePath, $year, $month, $fileInfo);
+                            // TODO write log info
+                        }
+
+                    } catch (Exception $e) {
+                        $this->failedFiles[] = array($fileInfo->getFilename(), 'undefined');
+                        $this->copyFile($sourcePath, 'undefined', 'undefined', $fileInfo);
                         // TODO write log info
                     }
-
                 } else {
                     $this->failedFiles[] = array($fileInfo->getFilename(), 'undefined');
-                    #$this->copyFile($sourcePath, 'undefined', $fileInfo);
-                    // TODO write log info
+                    $this->copyFile($sourcePath, 'undefined', 'undefined', $fileInfo);
                 }
             }
         }
@@ -253,6 +295,10 @@ class ImageService
     {
         $destinationPath = $this->getTarget() . '/' . $year . '/' . $month . '/' . $fileInfo->getFilename() ;
 
+        if (!is_dir($this->getTarget().'/'. $year)) {
+            mkdir($this->getTarget().'/'. $year);
+        }
+
         if (!is_dir($this->getTarget().'/'. $year . '/' . $month)) {
             mkdir($this->getTarget().'/'. $year . '/' . $month);
         }
@@ -267,6 +313,7 @@ class ImageService
     /**
      * @param array $exifData
      * @return array|DateTime|mixed|null
+     * @throws Exception
      */
     private function getCreationDate(array $exifData) : DateTime
     {
@@ -279,7 +326,29 @@ class ImageService
             return new DateTime($date);
 
         } else {
-            return null;
+            throw new Exception('Date not found');
         }
+    }
+
+    /**
+     * Function scans folders and counts files.
+     */
+    public function countImages() : int
+    {
+        $this->resetTargetFolders();
+        $this->createTargetFolders();
+        $directoryIterator = new DirectoryIterator($this->getSource());
+
+        $this->fileCount = 0;
+
+        foreach ($directoryIterator as $fileInfo) {
+            if (!$fileInfo->isDot()) {
+
+                $this->fileCount++;
+
+            }
+        }
+
+        return $this->fileCount;
     }
 }

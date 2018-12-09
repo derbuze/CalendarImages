@@ -13,6 +13,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 class SortImagesCommand extends Command
 {
 
+    /** @var ImageService $imageService */
     private $imageService;
 
     public function __construct(ImageService $imageService)
@@ -55,17 +56,15 @@ class SortImagesCommand extends Command
             ''
         ]);
 
-        $progressBar = new ProgressBar($output,10);
+
+        $imageCount = $this->imageService->countImages();
+
+        $progressBar = new ProgressBar($output, $imageCount);
         $progressBar->start();
 
+        $this->imageService->setProgressBar($progressBar);
         $this->imageService->sortImages();
 
-        $i = 1;
-        while ($i < 10) {
-            $i++;
-            sleep(1);
-            $progressBar->advance();
-        }
         $progressBar->finish();
 
         $output->writeln(['', '']);
